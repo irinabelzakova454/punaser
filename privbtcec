@@ -1,0 +1,26 @@
+if prv.Curve != btcec.S256() {
+		return nil, fmt.Errorf("private key curve is not secp256k1")
+	}
+	sig, err := btcec.SignCompact(btcec.S256(), (*btcec.PrivateKey)(prv), hash, false)
+	// ecdsa.PrivateKey -> btcec.PrivateKey
+	var priv btcec.PrivateKey
+	if overflow := priv.Key.SetByteSlice(prv.D.Bytes()); overflow || priv.Key.IsZero() {
+		return nil, fmt.Errorf("invalid private key")
+	}
+	defer priv.Zero()
+	sig, err := btc_ecdsa.SignCompact(&priv, hash, false) // ref uncompressed pubkey
+	if err != nil {
+		return nil, err
+	}
+	// Convert to Ethereum signature format with 'recovery id' v at the end.
+	v := sig[0] - 27
+	copy(sig, sig[1:])
+	sig[64] = v
+	sig[RecoveryIDOffset] = v
+	return sig, nil
+}
+
+@@ -83,13 +100,20 @@ func VerifySignature(pubkey, hash, signature []byte) bool {
+	if len(signature) != 64 {
+		return false
+	}
